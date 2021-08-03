@@ -8,64 +8,68 @@
 
 import Cocoa
 
-struct FlagStatus {
-    let closed: String
-    let green: String
-    let yellow: String
-    let red: String
+enum FlagStatus : String {
+	case closed = "C"
+    case green = "G"
+	case yellow = "Y"
+	case red = "R"
 }
 
-@NSApplicationMain
+@main
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     @IBOutlet weak var window: NSWindow!
     @IBOutlet weak var statusMenu: NSMenu!
     
-    let statusItem = NSStatusBar.systemStatusBar().statusItemWithLength(-1)
-    let flagStatus = FlagStatus(closed: "C", green: "G", yellow: "Y", red: "R")
-    
-    func applicationDidFinishLaunching(aNotification: NSNotification) {
-        updateFlag();
-        NSTimer.scheduledTimerWithTimeInterval(360, target: self, selector: #selector(AppDelegate.updateFlag), userInfo: nil, repeats: true);
+	let statusItem = NSStatusBar.system.statusItem(withLength: -1)
+	var flagStatus = FlagStatus.closed {
+		didSet {
+			let imageName: String
+
+			switch self.flagStatus {
+				case .closed: imageName = "closeFlag"
+				case .green: imageName = "greenFlag"
+				case .yellow: imageName = "yellowFlag"
+				case .red: imageName = "redFlag"
+			}
+
+			self.statusItem.image = NSImage(named: imageName)
+		}
+	}
+
+	
+	func applicationDidFinishLaunching(_ aNotification: Notification) {
+		self.statusItem.menu = self.statusMenu;
+
+		updateFlag();
+		Timer.scheduledTimer(timeInterval: 360, target: self, selector: #selector(AppDelegate.updateFlag), userInfo: nil, repeats: true);
     }
     
-    func updateFlag() -> Void {
-        let url = NSURL(string: "https://portal2.community-boating.org/pls/apex/CBI_PROD.FLAG_JS")
-        let task = NSURLSession.sharedSession().dataTaskWithURL(url!) {(data, response, error) in
-            let dataString = NSString(data: data!, encoding: NSUTF8StringEncoding)
-            let splitString = dataString?.componentsSeparatedByString("\"")
-            if (splitString?.count > 1) {
-                var icon = NSImage(named: "yellowFlag")
-                let status = splitString![1];
-                
-                switch status {
-                case self.flagStatus.closed:
-                    print("closed")
-                    icon = NSImage(named: "closeFlag")
-                case self.flagStatus.green:
-                    print("green")
-                    icon = NSImage(named: "greenFlag")
-                case self.flagStatus.yellow:
-                    print("yellow")
-                    icon = NSImage(named: "yellowFlag")
-                case self.flagStatus.red:
-                    print("red")
-                    icon = NSImage(named: "redFlag")
-                default:
-                    print("unknown status: " + status)
-                }
-                
-                self.statusItem.image = icon;
-                self.statusItem.menu = self.statusMenu;
-            }
-        }
-        
-        task.resume()
+	@objc func updateFlag() -> Void {
+		if let url = URL(string: "https://api.community-boating.org/api/flag") {
+			let task = URLSession.shared.dataTask(with: url) {(data, response, error) in
+				if let data = data,
+				   let dataString = String(data: data, encoding: .utf8)
+				{
+					let splitString = dataString.components(separatedBy: "\"")
+					if splitString.count > 1 {
+						let statusString = splitString[1]
+						if let status = FlagStatus(rawValue: statusString) {
+							DispatchQueue.main.async {
+								self.flagStatus = status
+							}
+						}
+					}
+				}
+			}
+
+			task.resume()
+		}
     }
 
-    @IBAction func menuClicked(sender: NSMenuItem) {
-        let url = NSURL(string: "http://www.community-boating.org");
-        NSWorkspace.sharedWorkspace().openURL(url!)
+    @IBAction func menuClicked(_ sender: NSMenuItem) {
+        let url = URL(string: "http://www.community-boating.org");
+		NSWorkspace.shared.open(url!)
     }
     
 }
